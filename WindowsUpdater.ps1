@@ -414,6 +414,16 @@ function Install-WindowsUpdatesSelected {
     }
 }
 
+# List of package IDs that cannot be updated via winget (self-updating or Store-only)
+$script:SkipPackages = @(
+    "Microsoft.DesktopAppInstaller",
+    "Microsoft.WindowsStore",
+    "Microsoft.StorePurchaseApp",
+    "Microsoft.WindowsTerminal",
+    "Microsoft.GetHelp",
+    "Microsoft.Getstarted"
+)
+
 # Function to install Winget Updates
 function Install-WingetUpdatesSelected {
     $selectedApps = @()
@@ -439,20 +449,42 @@ function Install-WingetUpdatesSelected {
         $appInfo = $app.Info
         $item = $app.Item
         
+        # Skip packages that can't be updated via winget
+        if ($script:SkipPackages -contains $appInfo.Id) {
+            $item.SubItems[3].Text = "Skipped"
+            Write-Log "Skipped: $($appInfo.Name) (requires Microsoft Store)"
+            $progressBar.Value = [math]::Min(100, [int](($current / $selectedApps.Count) * 100))
+            [System.Windows.Forms.Application]::DoEvents()
+            continue
+        }
+        
         Update-Status "Updating: $($appInfo.Name) ($current/$($selectedApps.Count))..."
         $item.SubItems[3].Text = "Installing..."
         [System.Windows.Forms.Application]::DoEvents()
         
         try {
-            $result = winget upgrade --id $appInfo.Id --silent --accept-package-agreements --accept-source-agreements 2>&1
+            # First attempt: with --silent and --force
+            $result = winget upgrade --id $appInfo.Id --silent --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
             
             if ($LASTEXITCODE -eq 0) {
                 $item.SubItems[3].Text = "Updated"
                 Write-Log "Updated: $($appInfo.Name)"
             }
             else {
-                $item.SubItems[3].Text = "Failed"
-                Write-Log "Failed to update: $($appInfo.Name)"
+                # Second attempt: without --silent (some packages don't support it)
+                Write-Log "Retrying $($appInfo.Name) without silent mode..."
+                $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
+                
+                if ($LASTEXITCODE -eq 0) {
+                    $item.SubItems[3].Text = "Updated"
+                    Write-Log "Updated: $($appInfo.Name)"
+                }
+                else {
+                    $item.SubItems[3].Text = "Failed"
+                    # Extract meaningful error from output
+                    $errorMsg = if ($result -match "0x[0-9a-fA-F]+") { $Matches[0] } else { "Exit code: $LASTEXITCODE" }
+                    Write-Log "Failed to update: $($appInfo.Name) ($errorMsg)"
+                }
             }
         }
         catch {

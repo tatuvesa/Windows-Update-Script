@@ -302,9 +302,9 @@ function Get-WingetUpdatesAvailable {
                         
                         if ($appName -and $availableVer -and $appName -notmatch "^-+$") {
                             $updateInfo = @{
-                                Name = $appName
-                                Id = $appId
-                                CurrentVersion = $currentVer
+                                Name             = $appName
+                                Id               = $appId
+                                CurrentVersion   = $currentVer
                                 AvailableVersion = $availableVer
                             }
                             $script:WingetUpdates += $updateInfo
@@ -536,11 +536,11 @@ function Clear-TemporaryFiles {
                 # For thumbnails, only delete specific cache files
                 if ($folder.Name -eq "Explorer Thumbnails") {
                     Get-ChildItem -Path $folder.Path -Filter "thumbcache_*.db" -Force -ErrorAction SilentlyContinue | 
-                        Remove-Item -Force -ErrorAction SilentlyContinue
+                    Remove-Item -Force -ErrorAction SilentlyContinue
                 }
                 else {
                     Get-ChildItem -Path $folder.Path -Recurse -Force -ErrorAction SilentlyContinue | 
-                        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
                 }
                 
                 $sizeAfter = (Get-ChildItem -Path $folder.Path -Recurse -Force -ErrorAction SilentlyContinue | 
@@ -618,147 +618,147 @@ function Clear-TemporaryFiles {
 
 # Check Button Click Event
 $checkButton.Add_Click({
-    $checkButton.Enabled = $false
-    $startButton.Enabled = $false
-    $progressBar.Style = "Marquee"
+        $checkButton.Enabled = $false
+        $startButton.Enabled = $false
+        $progressBar.Style = "Marquee"
     
-    $winCount = Get-WindowsUpdatesAvailable
-    $appCount = Get-WingetUpdatesAvailable
+        $winCount = Get-WindowsUpdatesAvailable
+        $appCount = Get-WingetUpdatesAvailable
     
-    $progressBar.Style = "Continuous"
-    $progressBar.Value = 0
+        $progressBar.Style = "Continuous"
+        $progressBar.Value = 0
     
-    $totalUpdates = $winCount + $appCount
-    if ($totalUpdates -gt 0) {
-        Update-Status "Found $winCount Windows Update(s) and $appCount Application Update(s)"
-        $startButton.Enabled = $true
-    }
-    else {
-        Update-Status "No updates available. Your system is up to date!"
-    }
+        $totalUpdates = $winCount + $appCount
+        if ($totalUpdates -gt 0) {
+            Update-Status "Found $winCount Windows Update(s) and $appCount Application Update(s)"
+            $startButton.Enabled = $true
+        }
+        else {
+            Update-Status "No updates available. Your system is up to date!"
+        }
     
-    $checkButton.Enabled = $true
-    Write-Log "Update check completed"
-})
+        $checkButton.Enabled = $true
+        Write-Log "Update check completed"
+    })
 
 # Select All Button Click Event
 $selectAllButton.Add_Click({
-    $allChecked = $true
-    foreach ($item in $winUpdatesList.Items) {
-        if (-not $item.Checked) { $allChecked = $false; break }
-    }
-    foreach ($item in $wingetList.Items) {
-        if (-not $item.Checked) { $allChecked = $false; break }
-    }
+        $allChecked = $true
+        foreach ($item in $winUpdatesList.Items) {
+            if (-not $item.Checked) { $allChecked = $false; break }
+        }
+        foreach ($item in $wingetList.Items) {
+            if (-not $item.Checked) { $allChecked = $false; break }
+        }
     
-    $newState = -not $allChecked
-    foreach ($item in $winUpdatesList.Items) { $item.Checked = $newState }
-    foreach ($item in $wingetList.Items) { $item.Checked = $newState }
+        $newState = -not $allChecked
+        foreach ($item in $winUpdatesList.Items) { $item.Checked = $newState }
+        foreach ($item in $wingetList.Items) { $item.Checked = $newState }
     
-    $selectAllButton.Text = if ($newState) { "Deselect All" } else { "Select All" }
-})
+        $selectAllButton.Text = if ($newState) { "Deselect All" } else { "Select All" }
+    })
 
 # Start Updates Button Click Event
 $startButton.Add_Click({
-    $checkButton.Enabled = $false
-    $startButton.Enabled = $false
-    $selectAllButton.Enabled = $false
+        $checkButton.Enabled = $false
+        $startButton.Enabled = $false
+        $selectAllButton.Enabled = $false
     
-    $progressBar.Value = 0
-    $progressBar.Maximum = 100
+        $progressBar.Value = 0
+        $progressBar.Maximum = 100
     
-    Write-Log "Starting update installation..."
+        Write-Log "Starting update installation..."
     
-    # Install Windows Updates first
-    $rebootRequired = Install-WindowsUpdatesSelected
+        # Install Windows Updates first
+        $rebootRequired = Install-WindowsUpdatesSelected
     
-    # Then install Winget updates
-    Install-WingetUpdatesSelected
+        # Then install Winget updates
+        Install-WingetUpdatesSelected
     
-    Update-Status "All updates completed!"
-    Write-Log "All update operations finished"
+        Update-Status "All updates completed!"
+        Write-Log "All update operations finished"
     
-    $progressBar.Value = 100
+        $progressBar.Value = 100
     
-    # Show reboot prompt if needed
-    if ($rebootRequired) {
-        $rebootButton.Visible = $true
-        Update-Status "Updates completed. A reboot is required to finish installation."
+        # Show reboot prompt if needed
+        if ($rebootRequired) {
+            $rebootButton.Visible = $true
+            Update-Status "Updates completed. A reboot is required to finish installation."
         
-        $result = [System.Windows.Forms.MessageBox]::Show(
-            "Updates have been installed successfully.`n`nA system restart is required to complete the installation.`n`nWould you like to restart now?",
-            "Restart Required",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "Updates have been installed successfully.`n`nA system restart is required to complete the installation.`n`nWould you like to restart now?",
+                "Restart Required",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Question
+            )
         
-        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-            Write-Log "User initiated system restart"
-            Restart-Computer -Force
-        }
-    }
-    else {
-        $result = [System.Windows.Forms.MessageBox]::Show(
-            "All updates have been installed successfully!`n`nIt's recommended to restart your computer.`n`nWould you like to restart now?",
-            "Updates Complete",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        )
-        
-        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-            Write-Log "User initiated system restart"
-            Restart-Computer -Force
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Write-Log "User initiated system restart"
+                Restart-Computer -Force
+            }
         }
         else {
-            $rebootButton.Visible = $true
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "All updates have been installed successfully!`n`nIt's recommended to restart your computer.`n`nWould you like to restart now?",
+                "Updates Complete",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+        
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Write-Log "User initiated system restart"
+                Restart-Computer -Force
+            }
+            else {
+                $rebootButton.Visible = $true
+            }
         }
-    }
     
-    $checkButton.Enabled = $true
-    $selectAllButton.Enabled = $true
-})
+        $checkButton.Enabled = $true
+        $selectAllButton.Enabled = $true
+    })
 
 # Reboot Button Click Event
 $rebootButton.Add_Click({
-    $result = [System.Windows.Forms.MessageBox]::Show(
-        "Are you sure you want to restart your computer now?`n`nPlease save all your work before continuing.",
-        "Confirm Restart",
-        [System.Windows.Forms.MessageBoxButtons]::YesNo,
-        [System.Windows.Forms.MessageBoxIcon]::Warning
-    )
+        $result = [System.Windows.Forms.MessageBox]::Show(
+            "Are you sure you want to restart your computer now?`n`nPlease save all your work before continuing.",
+            "Confirm Restart",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
     
-    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-        Write-Log "Initiating system restart..."
-        Restart-Computer -Force
-    }
-})
+        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Write-Log "Initiating system restart..."
+            Restart-Computer -Force
+        }
+    })
 
 # Clean Temp Button Click Event
 $cleanButton.Add_Click({
-    $result = [System.Windows.Forms.MessageBox]::Show(
-        "This will clean temporary files including:`n`n- User and System Temp folders`n- Windows Update cache`n- Prefetch files`n- Thumbnail cache`n- Error reports and crash dumps`n- WinSxS component cleanup`n`nThis may take several minutes. Continue?",
-        "Clean Temporary Files",
-        [System.Windows.Forms.MessageBoxButtons]::YesNo,
-        [System.Windows.Forms.MessageBoxIcon]::Question
-    )
+        $result = [System.Windows.Forms.MessageBox]::Show(
+            "This will clean temporary files including:`n`n- User and System Temp folders`n- Windows Update cache`n- Prefetch files`n- Thumbnail cache`n- Error reports and crash dumps`n- WinSxS component cleanup`n`nThis may take several minutes. Continue?",
+            "Clean Temporary Files",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
+        )
     
-    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-        $cleanButton.Enabled = $false
-        $checkButton.Enabled = $false
-        $startButton.Enabled = $false
+        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+            $cleanButton.Enabled = $false
+            $checkButton.Enabled = $false
+            $startButton.Enabled = $false
         
-        Clear-TemporaryFiles
+            Clear-TemporaryFiles
         
-        $cleanButton.Enabled = $true
-        $checkButton.Enabled = $true
-    }
-})
+            $cleanButton.Enabled = $true
+            $checkButton.Enabled = $true
+        }
+    })
 
 # Form closing event
 $form.Add_FormClosing({
-    $script:UpdateSession = $null
-    $script:UpdateSearcher = $null
-})
+        $script:UpdateSession = $null
+        $script:UpdateSearcher = $null
+    })
 
 # Check for admin rights on startup
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)

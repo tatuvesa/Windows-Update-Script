@@ -52,7 +52,7 @@ $script:UpdateSearcher = $null
 # Create the main form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Windows System Updater"
-$form.Size = New-Object System.Drawing.Size(800, 720)
+$form.Size = New-Object System.Drawing.Size(850, 720)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedSingle"
 $form.MaximizeBox = $false
@@ -88,7 +88,7 @@ $diskSpaceLabel = New-Object System.Windows.Forms.Label
 $diskSpaceLabel.Text = "Disk: --"
 $diskSpaceLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $diskSpaceLabel.Size = New-Object System.Drawing.Size(200, 20)
-$diskSpaceLabel.Location = New-Object System.Drawing.Point(380, 15)
+$diskSpaceLabel.Location = New-Object System.Drawing.Point(410, 15)
 $diskSpaceLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $form.Controls.Add($diskSpaceLabel)
 
@@ -97,7 +97,7 @@ $networkLabel = New-Object System.Windows.Forms.Label
 $networkLabel.Text = "Network: Checking..."
 $networkLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $networkLabel.Size = New-Object System.Drawing.Size(200, 20)
-$networkLabel.Location = New-Object System.Drawing.Point(380, 35)
+$networkLabel.Location = New-Object System.Drawing.Point(410, 35)
 $networkLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $form.Controls.Add($networkLabel)
 
@@ -105,7 +105,7 @@ $form.Controls.Add($networkLabel)
 $darkModeButton = New-Object System.Windows.Forms.Button
 $darkModeButton.Text = "Dark Mode"
 $darkModeButton.Size = New-Object System.Drawing.Size(100, 30)
-$darkModeButton.Location = New-Object System.Drawing.Point(600, 20)
+$darkModeButton.Location = New-Object System.Drawing.Point(620, 20)
 $darkModeButton.FlatStyle = "Flat"
 $darkModeButton.Font = New-Object System.Drawing.Font("Segoe UI", 8)
 $form.Controls.Add($darkModeButton)
@@ -114,7 +114,7 @@ $form.Controls.Add($darkModeButton)
 $historyButton = New-Object System.Windows.Forms.Button
 $historyButton.Text = "Update History"
 $historyButton.Size = New-Object System.Drawing.Size(100, 30)
-$historyButton.Location = New-Object System.Drawing.Point(705, 20)
+$historyButton.Location = New-Object System.Drawing.Point(725, 20)
 $historyButton.FlatStyle = "Flat"
 $historyButton.Font = New-Object System.Drawing.Font("Segoe UI", 8)
 $form.Controls.Add($historyButton)
@@ -122,14 +122,14 @@ $form.Controls.Add($historyButton)
 # Status Label
 $statusLabel = New-Object System.Windows.Forms.Label
 $statusLabel.Text = "Ready. Click 'Check for Updates' to begin."
-$statusLabel.Size = New-Object System.Drawing.Size(740, 25)
+$statusLabel.Size = New-Object System.Drawing.Size(790, 25)
 $statusLabel.Location = New-Object System.Drawing.Point(20, 55)
 $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
 $form.Controls.Add($statusLabel)
 
 # Progress Bar
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Size = New-Object System.Drawing.Size(740, 23)
+$progressBar.Size = New-Object System.Drawing.Size(790, 23)
 $progressBar.Location = New-Object System.Drawing.Point(20, 85)
 $progressBar.Style = "Continuous"
 $form.Controls.Add($progressBar)
@@ -137,13 +137,13 @@ $form.Controls.Add($progressBar)
 # Windows Updates Group Box
 $winUpdatesGroup = New-Object System.Windows.Forms.GroupBox
 $winUpdatesGroup.Text = "Windows Updates (including Optional Drivers)"
-$winUpdatesGroup.Size = New-Object System.Drawing.Size(740, 180)
+$winUpdatesGroup.Size = New-Object System.Drawing.Size(790, 180)
 $winUpdatesGroup.Location = New-Object System.Drawing.Point(20, 120)
 $form.Controls.Add($winUpdatesGroup)
 
 # Windows Updates ListView
 $winUpdatesList = New-Object System.Windows.Forms.ListView
-$winUpdatesList.Size = New-Object System.Drawing.Size(720, 145)
+$winUpdatesList.Size = New-Object System.Drawing.Size(770, 145)
 $winUpdatesList.Location = New-Object System.Drawing.Point(10, 20)
 $winUpdatesList.View = "Details"
 $winUpdatesList.FullRowSelect = $true
@@ -157,13 +157,13 @@ $winUpdatesGroup.Controls.Add($winUpdatesList)
 # Winget Updates Group Box
 $wingetGroup = New-Object System.Windows.Forms.GroupBox
 $wingetGroup.Text = "Application Updates (winget)"
-$wingetGroup.Size = New-Object System.Drawing.Size(740, 180)
+$wingetGroup.Size = New-Object System.Drawing.Size(790, 180)
 $wingetGroup.Location = New-Object System.Drawing.Point(20, 310)
 $form.Controls.Add($wingetGroup)
 
 # Winget Updates ListView
 $wingetList = New-Object System.Windows.Forms.ListView
-$wingetList.Size = New-Object System.Drawing.Size(720, 145)
+$wingetList.Size = New-Object System.Drawing.Size(770, 145)
 $wingetList.Location = New-Object System.Drawing.Point(10, 20)
 $wingetList.View = "Details"
 $wingetList.FullRowSelect = $true
@@ -176,7 +176,7 @@ $wingetGroup.Controls.Add($wingetList)
 
 # Buttons Panel
 $buttonPanel = New-Object System.Windows.Forms.Panel
-$buttonPanel.Size = New-Object System.Drawing.Size(740, 90)
+$buttonPanel.Size = New-Object System.Drawing.Size(790, 90)
 $buttonPanel.Location = New-Object System.Drawing.Point(20, 500)
 $form.Controls.Add($buttonPanel)
 
@@ -258,14 +258,14 @@ $buttonPanel.Controls.Add($rebootAutoButton)
 # Log TextBox
 $logGroup = New-Object System.Windows.Forms.GroupBox
 $logGroup.Text = "Log"
-$logGroup.Size = New-Object System.Drawing.Size(740, 100)
+$logGroup.Size = New-Object System.Drawing.Size(790, 100)
 $logGroup.Location = New-Object System.Drawing.Point(20, 600)
 $form.Controls.Add($logGroup)
 
 $logBox = New-Object System.Windows.Forms.TextBox
 $logBox.Multiline = $true
 $logBox.ScrollBars = "Vertical"
-$logBox.Size = New-Object System.Drawing.Size(720, 70)
+$logBox.Size = New-Object System.Drawing.Size(770, 70)
 $logBox.Location = New-Object System.Drawing.Point(10, 20)
 $logBox.ReadOnly = $true
 $logBox.BackColor = [System.Drawing.Color]::White

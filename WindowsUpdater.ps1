@@ -243,6 +243,17 @@ $autoRestartCheck.Location = New-Object System.Drawing.Point(0, 50)
 $autoRestartCheck.Checked = $true
 $buttonPanel.Controls.Add($autoRestartCheck)
 
+# Scan Leftovers Button
+$leftoversButton = New-Object System.Windows.Forms.Button
+$leftoversButton.Text = "Scan Leftovers"
+$leftoversButton.Size = New-Object System.Drawing.Size(110, 25)
+$leftoversButton.Location = New-Object System.Drawing.Point(200, 50)
+$leftoversButton.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 160)
+$leftoversButton.ForeColor = [System.Drawing.Color]::White
+$leftoversButton.FlatStyle = "Flat"
+$leftoversButton.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
+$buttonPanel.Controls.Add($leftoversButton)
+
 # Reboot with Auto-Start Button (hidden initially)
 $rebootAutoButton = New-Object System.Windows.Forms.Button
 $rebootAutoButton.Text = "Reboot + Continue"
@@ -493,6 +504,341 @@ function Show-UpdateHistory {
     }
     
     [void]$historyForm.ShowDialog()
+}
+
+# Function to get installed programs
+function Get-InstalledPrograms {
+    $programs = @()
+    
+    # Registry paths for installed programs
+    $regPaths = @(
+        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+    
+    foreach ($path in $regPaths) {
+        try {
+            $items = Get-ItemProperty $path -ErrorAction SilentlyContinue
+            foreach ($item in $items) {
+                if ($item.DisplayName) {
+                    $programs += @{
+                        Name = $item.DisplayName
+                        Publisher = $item.Publisher
+                        InstallLocation = $item.InstallLocation
+                        UninstallString = $item.UninstallString
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+    
+    return $programs
+}
+
+# Function to scan for leftover files
+function Show-LeftoverScanner {
+    $scanForm = New-Object System.Windows.Forms.Form
+    $scanForm.Text = "Leftover Files Scanner"
+    $scanForm.Size = New-Object System.Drawing.Size(800, 600)
+    $scanForm.StartPosition = "CenterParent"
+    $scanForm.FormBorderStyle = "FixedDialog"
+    $scanForm.MaximizeBox = $false
+    $scanForm.MinimizeBox = $false
+    
+    if ($script:DarkMode) {
+        $scanForm.BackColor = $script:DarkColors.FormBack
+    }
+    
+    # Status label
+    $scanStatus = New-Object System.Windows.Forms.Label
+    $scanStatus.Text = "Click 'Scan' to search for leftover files from uninstalled programs..."
+    $scanStatus.Size = New-Object System.Drawing.Size(760, 25)
+    $scanStatus.Location = New-Object System.Drawing.Point(10, 10)
+    if ($script:DarkMode) { $scanStatus.ForeColor = $script:DarkColors.TextColor }
+    $scanForm.Controls.Add($scanStatus)
+    
+    # Progress bar
+    $scanProgress = New-Object System.Windows.Forms.ProgressBar
+    $scanProgress.Size = New-Object System.Drawing.Size(760, 20)
+    $scanProgress.Location = New-Object System.Drawing.Point(10, 40)
+    $scanForm.Controls.Add($scanProgress)
+    
+    # Results ListView
+    $leftoversList = New-Object System.Windows.Forms.ListView
+    $leftoversList.Size = New-Object System.Drawing.Size(760, 400)
+    $leftoversList.Location = New-Object System.Drawing.Point(10, 70)
+    $leftoversList.View = "Details"
+    $leftoversList.FullRowSelect = $true
+    $leftoversList.CheckBoxes = $true
+    $leftoversList.Columns.Add("Folder/File", 350) | Out-Null
+    $leftoversList.Columns.Add("Location", 200) | Out-Null
+    $leftoversList.Columns.Add("Size", 80) | Out-Null
+    $leftoversList.Columns.Add("Type", 100) | Out-Null
+    
+    if ($script:DarkMode) {
+        $leftoversList.BackColor = $script:DarkColors.ListBack
+        $leftoversList.ForeColor = $script:DarkColors.TextColor
+    }
+    $scanForm.Controls.Add($leftoversList)
+    
+    # Buttons panel
+    $scanButtonPanel = New-Object System.Windows.Forms.Panel
+    $scanButtonPanel.Size = New-Object System.Drawing.Size(760, 40)
+    $scanButtonPanel.Location = New-Object System.Drawing.Point(10, 480)
+    $scanForm.Controls.Add($scanButtonPanel)
+    
+    # Scan button
+    $scanBtn = New-Object System.Windows.Forms.Button
+    $scanBtn.Text = "Scan for Leftovers"
+    $scanBtn.Size = New-Object System.Drawing.Size(150, 35)
+    $scanBtn.Location = New-Object System.Drawing.Point(0, 0)
+    $scanBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
+    $scanBtn.ForeColor = [System.Drawing.Color]::White
+    $scanBtn.FlatStyle = "Flat"
+    $scanButtonPanel.Controls.Add($scanBtn)
+    
+    # Select All button
+    $selectAllBtn = New-Object System.Windows.Forms.Button
+    $selectAllBtn.Text = "Select All"
+    $selectAllBtn.Size = New-Object System.Drawing.Size(100, 35)
+    $selectAllBtn.Location = New-Object System.Drawing.Point(160, 0)
+    $selectAllBtn.FlatStyle = "Flat"
+    $scanButtonPanel.Controls.Add($selectAllBtn)
+    
+    # Delete Selected button
+    $deleteBtn = New-Object System.Windows.Forms.Button
+    $deleteBtn.Text = "Delete Selected"
+    $deleteBtn.Size = New-Object System.Drawing.Size(130, 35)
+    $deleteBtn.Location = New-Object System.Drawing.Point(270, 0)
+    $deleteBtn.BackColor = [System.Drawing.Color]::FromArgb(200, 80, 80)
+    $deleteBtn.ForeColor = [System.Drawing.Color]::White
+    $deleteBtn.FlatStyle = "Flat"
+    $deleteBtn.Enabled = $false
+    $scanButtonPanel.Controls.Add($deleteBtn)
+    
+    # Total size label
+    $totalSizeLabel = New-Object System.Windows.Forms.Label
+    $totalSizeLabel.Text = "Total selected: 0 B"
+    $totalSizeLabel.Size = New-Object System.Drawing.Size(200, 25)
+    $totalSizeLabel.Location = New-Object System.Drawing.Point(550, 8)
+    $totalSizeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+    if ($script:DarkMode) { $totalSizeLabel.ForeColor = $script:DarkColors.TextColor }
+    $scanButtonPanel.Controls.Add($totalSizeLabel)
+    
+    # Warning label
+    $warningLabel = New-Object System.Windows.Forms.Label
+    $warningLabel.Text = "WARNING: Review carefully before deleting. Some folders may contain data you want to keep!"
+    $warningLabel.Size = New-Object System.Drawing.Size(760, 20)
+    $warningLabel.Location = New-Object System.Drawing.Point(10, 525)
+    $warningLabel.ForeColor = [System.Drawing.Color]::OrangeRed
+    $scanForm.Controls.Add($warningLabel)
+    
+    # Folders to exclude (system/essential folders)
+    $excludeFolders = @(
+        "Common Files", "Windows Defender", "Windows Mail", "Windows Media Player",
+        "Windows NT", "Windows Photo Viewer", "Windows Portable Devices", "Windows Security",
+        "Windows Sidebar", "WindowsPowerShell", "Microsoft", "Internet Explorer",
+        "Windows", "WindowsApps", "ModifiableWindowsApps", "Reference Assemblies",
+        "Microsoft.NET", "dotnet", "MSBuild", "IIS", "IIS Express",
+        "Microsoft Visual Studio", "Microsoft SDKs", "Microsoft SQL Server",
+        "PowerShell", "NVIDIA Corporation", "AMD", "Intel", "Realtek",
+        "Dell", "HP", "Lenovo", "ASUS", "Acer", "Microsoft Update Health Tools",
+        "Microsoft Office", "Office", "Teams", "OneDrive", "Edge", "Windows Defender Advanced Threat Protection"
+    )
+    
+    # Scan button click
+    $scanBtn.Add_Click({
+        $scanBtn.Enabled = $false
+        $leftoversList.Items.Clear()
+        $scanStatus.Text = "Scanning... Getting installed programs..."
+        $scanProgress.Style = "Marquee"
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        # Get installed programs
+        $installedPrograms = Get-InstalledPrograms
+        $installedNames = $installedPrograms | ForEach-Object { $_.Name.ToLower() }
+        $installedPublishers = $installedPrograms | ForEach-Object { if ($_.Publisher) { $_.Publisher.ToLower() } } | Where-Object { $_ }
+        
+        $leftovers = @()
+        $foldersToScan = @(
+            @{ Path = "C:\Program Files"; Type = "Program Files" },
+            @{ Path = "C:\Program Files (x86)"; Type = "Program Files (x86)" },
+            @{ Path = "$env:APPDATA"; Type = "AppData\Roaming" },
+            @{ Path = "$env:LOCALAPPDATA"; Type = "AppData\Local" },
+            @{ Path = "C:\ProgramData"; Type = "ProgramData" }
+        )
+        
+        $scanProgress.Style = "Continuous"
+        $scanProgress.Maximum = $foldersToScan.Count
+        $scanProgress.Value = 0
+        
+        foreach ($scanFolder in $foldersToScan) {
+            $scanProgress.Value++
+            $scanStatus.Text = "Scanning $($scanFolder.Type)..."
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            if (Test-Path $scanFolder.Path) {
+                try {
+                    $subFolders = Get-ChildItem -Path $scanFolder.Path -Directory -ErrorAction SilentlyContinue
+                    
+                    foreach ($folder in $subFolders) {
+                        $folderName = $folder.Name
+                        $folderLower = $folderName.ToLower()
+                        
+                        # Skip excluded folders
+                        $isExcluded = $false
+                        foreach ($exclude in $excludeFolders) {
+                            if ($folderLower -eq $exclude.ToLower() -or $folderLower -like "*$($exclude.ToLower())*") {
+                                $isExcluded = $true
+                                break
+                            }
+                        }
+                        if ($isExcluded) { continue }
+                        
+                        # Check if folder matches any installed program
+                        $isInstalled = $false
+                        foreach ($progName in $installedNames) {
+                            if ($progName -and ($folderLower -like "*$progName*" -or $progName -like "*$folderLower*")) {
+                                $isInstalled = $true
+                                break
+                            }
+                        }
+                        
+                        # Also check publisher names
+                        if (-not $isInstalled) {
+                            foreach ($publisher in $installedPublishers) {
+                                if ($publisher -and $folderLower -like "*$publisher*") {
+                                    $isInstalled = $true
+                                    break
+                                }
+                            }
+                        }
+                        
+                        # If not matched to any installed program, it might be a leftover
+                        if (-not $isInstalled) {
+                            # Calculate folder size
+                            try {
+                                $size = (Get-ChildItem -Path $folder.FullName -Recurse -Force -ErrorAction SilentlyContinue | 
+                                    Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                                if (-not $size) { $size = 0 }
+                            }
+                            catch { $size = 0 }
+                            
+                            # Only add if folder has some content
+                            if ($size -gt 0) {
+                                $leftovers += @{
+                                    Name = $folderName
+                                    Path = $folder.FullName
+                                    Size = $size
+                                    Type = $scanFolder.Type
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+        
+        # Sort by size descending
+        $leftovers = $leftovers | Sort-Object { $_.Size } -Descending
+        
+        # Add to list
+        foreach ($leftover in $leftovers) {
+            $item = New-Object System.Windows.Forms.ListViewItem($leftover.Name)
+            $item.SubItems.Add($leftover.Type) | Out-Null
+            $item.SubItems.Add((Format-FileSize $leftover.Size)) | Out-Null
+            $item.SubItems.Add("Folder") | Out-Null
+            $item.Tag = $leftover
+            $leftoversList.Items.Add($item) | Out-Null
+        }
+        
+        $scanProgress.Value = $scanProgress.Maximum
+        $scanStatus.Text = "Found $($leftovers.Count) potential leftover folder(s). Review and select items to delete."
+        $scanBtn.Enabled = $true
+        $deleteBtn.Enabled = $leftovers.Count -gt 0
+    })
+    
+    # Select All button click
+    $selectAllBtn.Add_Click({
+        $allChecked = $true
+        foreach ($item in $leftoversList.Items) {
+            if (-not $item.Checked) { $allChecked = $false; break }
+        }
+        foreach ($item in $leftoversList.Items) {
+            $item.Checked = -not $allChecked
+        }
+        $selectAllBtn.Text = if (-not $allChecked) { "Deselect All" } else { "Select All" }
+    })
+    
+    # Update total size when items are checked/unchecked
+    $leftoversList.Add_ItemChecked({
+        $totalSize = 0
+        $selectedCount = 0
+        foreach ($item in $leftoversList.Items) {
+            if ($item.Checked -and $item.Tag) {
+                $totalSize += $item.Tag.Size
+                $selectedCount++
+            }
+        }
+        $totalSizeLabel.Text = "Selected: $selectedCount ($(Format-FileSize $totalSize))"
+    })
+    
+    # Delete button click
+    $deleteBtn.Add_Click({
+        $selectedItems = @()
+        foreach ($item in $leftoversList.Items) {
+            if ($item.Checked) {
+                $selectedItems += $item
+            }
+        }
+        
+        if ($selectedItems.Count -eq 0) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "No items selected for deletion.",
+                "No Selection",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+            return
+        }
+        
+        $result = [System.Windows.Forms.MessageBox]::Show(
+            "Are you sure you want to delete $($selectedItems.Count) selected folder(s)?`n`nThis action cannot be undone!`n`nTip: Some folders may contain user data or settings you want to keep.",
+            "Confirm Deletion",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+        
+        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+            $deleted = 0
+            $failed = 0
+            
+            foreach ($item in $selectedItems) {
+                $path = $item.Tag.Path
+                try {
+                    Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
+                    $leftoversList.Items.Remove($item)
+                    $deleted++
+                }
+                catch {
+                    $item.ForeColor = [System.Drawing.Color]::Red
+                    $failed++
+                }
+            }
+            
+            $scanStatus.Text = "Deleted $deleted folder(s). $failed failed (may be in use)."
+            
+            if ($deleted -gt 0) {
+                # Refresh disk space on main form
+                Update-DiskSpace
+            }
+        }
+    })
+    
+    [void]$scanForm.ShowDialog()
 }
 
 # Function to check Windows Updates
@@ -1086,6 +1432,11 @@ $darkModeButton.Add_Click({
 # History Button Click Event
 $historyButton.Add_Click({
         Show-UpdateHistory
+    })
+
+# Leftovers Button Click Event
+$leftoversButton.Add_Click({
+        Show-LeftoverScanner
     })
 
 # Clean Temp Button Click Event

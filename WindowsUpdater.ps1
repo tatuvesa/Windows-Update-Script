@@ -10,6 +10,24 @@
     Run as Administrator for full functionality
 #>
 
+# Script path for auto-restart feature
+$script:ScriptPath = $MyInvocation.MyCommand.Path
+$script:AutoRestartTaskName = "WindowsUpdaterAutoRestart"
+$script:DarkMode = $false
+
+# Check if this is an auto-restart run
+$script:IsAutoRestart = $false
+if (Test-Path "HKCU:\Software\WindowsUpdater") {
+    $autoRestartFlag = Get-ItemProperty -Path "HKCU:\Software\WindowsUpdater" -Name "AutoRestart" -ErrorAction SilentlyContinue
+    if ($autoRestartFlag.AutoRestart -eq 1) {
+        $script:IsAutoRestart = $true
+        # Clean up the flag
+        Remove-ItemProperty -Path "HKCU:\Software\WindowsUpdater" -Name "AutoRestart" -ErrorAction SilentlyContinue
+        # Remove the scheduled task
+        Unregister-ScheduledTask -TaskName $script:AutoRestartTaskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
+}
+
 # Hide the PowerShell console window
 Add-Type -Name Window -Namespace Console -MemberDefinition '
 [DllImport("Kernel32.dll")]
@@ -34,20 +52,72 @@ $script:UpdateSearcher = $null
 # Create the main form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Windows System Updater"
-$form.Size = New-Object System.Drawing.Size(800, 650)
+$form.Size = New-Object System.Drawing.Size(800, 720)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedSingle"
 $form.MaximizeBox = $false
 $form.BackColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
+# Color schemes
+$script:LightColors = @{
+    FormBack = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    GroupBack = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    TextColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
+    ListBack = [System.Drawing.Color]::White
+    LogBack = [System.Drawing.Color]::White
+}
+$script:DarkColors = @{
+    FormBack = [System.Drawing.Color]::FromArgb(32, 32, 32)
+    GroupBack = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    TextColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    ListBack = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    LogBack = [System.Drawing.Color]::FromArgb(30, 30, 30)
+}
+
 # Title Label
 $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Text = "Windows System Updater"
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
-$titleLabel.Size = New-Object System.Drawing.Size(400, 40)
+$titleLabel.Size = New-Object System.Drawing.Size(350, 40)
 $titleLabel.Location = New-Object System.Drawing.Point(20, 15)
 $form.Controls.Add($titleLabel)
+
+# Disk Space Label
+$diskSpaceLabel = New-Object System.Windows.Forms.Label
+$diskSpaceLabel.Text = "Disk: --"
+$diskSpaceLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$diskSpaceLabel.Size = New-Object System.Drawing.Size(200, 20)
+$diskSpaceLabel.Location = New-Object System.Drawing.Point(380, 15)
+$diskSpaceLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+$form.Controls.Add($diskSpaceLabel)
+
+# Network Status Label
+$networkLabel = New-Object System.Windows.Forms.Label
+$networkLabel.Text = "Network: Checking..."
+$networkLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$networkLabel.Size = New-Object System.Drawing.Size(200, 20)
+$networkLabel.Location = New-Object System.Drawing.Point(380, 35)
+$networkLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+$form.Controls.Add($networkLabel)
+
+# Dark Mode Toggle Button
+$darkModeButton = New-Object System.Windows.Forms.Button
+$darkModeButton.Text = "Dark Mode"
+$darkModeButton.Size = New-Object System.Drawing.Size(100, 30)
+$darkModeButton.Location = New-Object System.Drawing.Point(600, 20)
+$darkModeButton.FlatStyle = "Flat"
+$darkModeButton.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$form.Controls.Add($darkModeButton)
+
+# History Button
+$historyButton = New-Object System.Windows.Forms.Button
+$historyButton.Text = "Update History"
+$historyButton.Size = New-Object System.Drawing.Size(100, 30)
+$historyButton.Location = New-Object System.Drawing.Point(705, 20)
+$historyButton.FlatStyle = "Flat"
+$historyButton.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$form.Controls.Add($historyButton)
 
 # Status Label
 $statusLabel = New-Object System.Windows.Forms.Label
@@ -106,14 +176,14 @@ $wingetGroup.Controls.Add($wingetList)
 
 # Buttons Panel
 $buttonPanel = New-Object System.Windows.Forms.Panel
-$buttonPanel.Size = New-Object System.Drawing.Size(740, 50)
+$buttonPanel.Size = New-Object System.Drawing.Size(740, 90)
 $buttonPanel.Location = New-Object System.Drawing.Point(20, 500)
 $form.Controls.Add($buttonPanel)
 
 # Check for Updates Button
 $checkButton = New-Object System.Windows.Forms.Button
 $checkButton.Text = "Check for Updates"
-$checkButton.Size = New-Object System.Drawing.Size(180, 40)
+$checkButton.Size = New-Object System.Drawing.Size(170, 40)
 $checkButton.Location = New-Object System.Drawing.Point(0, 5)
 $checkButton.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
 $checkButton.ForeColor = [System.Drawing.Color]::White
@@ -124,8 +194,8 @@ $buttonPanel.Controls.Add($checkButton)
 # Select All Button
 $selectAllButton = New-Object System.Windows.Forms.Button
 $selectAllButton.Text = "Select All"
-$selectAllButton.Size = New-Object System.Drawing.Size(120, 40)
-$selectAllButton.Location = New-Object System.Drawing.Point(200, 5)
+$selectAllButton.Size = New-Object System.Drawing.Size(100, 40)
+$selectAllButton.Location = New-Object System.Drawing.Point(180, 5)
 $selectAllButton.FlatStyle = "Flat"
 $selectAllButton.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $buttonPanel.Controls.Add($selectAllButton)
@@ -133,8 +203,8 @@ $buttonPanel.Controls.Add($selectAllButton)
 # Start Updates Button
 $startButton = New-Object System.Windows.Forms.Button
 $startButton.Text = "Start Updates"
-$startButton.Size = New-Object System.Drawing.Size(180, 40)
-$startButton.Location = New-Object System.Drawing.Point(340, 5)
+$startButton.Size = New-Object System.Drawing.Size(150, 40)
+$startButton.Location = New-Object System.Drawing.Point(290, 5)
 $startButton.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)
 $startButton.ForeColor = [System.Drawing.Color]::White
 $startButton.FlatStyle = "Flat"
@@ -144,9 +214,9 @@ $buttonPanel.Controls.Add($startButton)
 
 # Clean Temp Button
 $cleanButton = New-Object System.Windows.Forms.Button
-$cleanButton.Text = "Clean Temp Files"
-$cleanButton.Size = New-Object System.Drawing.Size(140, 40)
-$cleanButton.Location = New-Object System.Drawing.Point(540, 5)
+$cleanButton.Text = "Clean Temp"
+$cleanButton.Size = New-Object System.Drawing.Size(110, 40)
+$cleanButton.Location = New-Object System.Drawing.Point(450, 5)
 $cleanButton.BackColor = [System.Drawing.Color]::FromArgb(180, 100, 20)
 $cleanButton.ForeColor = [System.Drawing.Color]::White
 $cleanButton.FlatStyle = "Flat"
@@ -156,26 +226,46 @@ $buttonPanel.Controls.Add($cleanButton)
 # Reboot Button
 $rebootButton = New-Object System.Windows.Forms.Button
 $rebootButton.Text = "Reboot Now"
-$rebootButton.Size = New-Object System.Drawing.Size(120, 40)
-$rebootButton.Location = New-Object System.Drawing.Point(540, 5)
+$rebootButton.Size = New-Object System.Drawing.Size(110, 40)
+$rebootButton.Location = New-Object System.Drawing.Point(570, 5)
 $rebootButton.BackColor = [System.Drawing.Color]::FromArgb(200, 80, 80)
 $rebootButton.ForeColor = [System.Drawing.Color]::White
 $rebootButton.FlatStyle = "Flat"
-$rebootButton.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$rebootButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 $rebootButton.Visible = $false
 $buttonPanel.Controls.Add($rebootButton)
+
+# Auto-Restart Checkbox
+$autoRestartCheck = New-Object System.Windows.Forms.CheckBox
+$autoRestartCheck.Text = "Relaunch after restart"
+$autoRestartCheck.Size = New-Object System.Drawing.Size(180, 25)
+$autoRestartCheck.Location = New-Object System.Drawing.Point(0, 50)
+$autoRestartCheck.Checked = $true
+$buttonPanel.Controls.Add($autoRestartCheck)
+
+# Reboot with Auto-Start Button (hidden initially)
+$rebootAutoButton = New-Object System.Windows.Forms.Button
+$rebootAutoButton.Text = "Reboot + Continue"
+$rebootAutoButton.Size = New-Object System.Drawing.Size(130, 40)
+$rebootAutoButton.Location = New-Object System.Drawing.Point(690, 5)
+$rebootAutoButton.BackColor = [System.Drawing.Color]::FromArgb(130, 60, 60)
+$rebootAutoButton.ForeColor = [System.Drawing.Color]::White
+$rebootAutoButton.FlatStyle = "Flat"
+$rebootAutoButton.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
+$rebootAutoButton.Visible = $false
+$buttonPanel.Controls.Add($rebootAutoButton)
 
 # Log TextBox
 $logGroup = New-Object System.Windows.Forms.GroupBox
 $logGroup.Text = "Log"
-$logGroup.Size = New-Object System.Drawing.Size(740, 80)
-$logGroup.Location = New-Object System.Drawing.Point(20, 555)
+$logGroup.Size = New-Object System.Drawing.Size(740, 100)
+$logGroup.Location = New-Object System.Drawing.Point(20, 600)
 $form.Controls.Add($logGroup)
 
 $logBox = New-Object System.Windows.Forms.TextBox
 $logBox.Multiline = $true
 $logBox.ScrollBars = "Vertical"
-$logBox.Size = New-Object System.Drawing.Size(720, 50)
+$logBox.Size = New-Object System.Drawing.Size(720, 70)
 $logBox.Location = New-Object System.Drawing.Point(10, 20)
 $logBox.ReadOnly = $true
 $logBox.BackColor = [System.Drawing.Color]::White
@@ -205,6 +295,204 @@ function Format-FileSize {
     elseif ($Size -ge 1MB) { return "{0:N2} MB" -f ($Size / 1MB) }
     elseif ($Size -ge 1KB) { return "{0:N2} KB" -f ($Size / 1KB) }
     else { return "$Size B" }
+}
+
+# Function to update disk space display
+function Update-DiskSpace {
+    try {
+        $drive = Get-PSDrive -Name C -ErrorAction SilentlyContinue
+        if ($drive) {
+            $free = Format-FileSize ($drive.Free)
+            $used = Format-FileSize ($drive.Used)
+            $total = Format-FileSize ($drive.Free + $drive.Used)
+            $diskSpaceLabel.Text = "Disk C: $free free / $total"
+        }
+    }
+    catch {
+        $diskSpaceLabel.Text = "Disk: Unable to read"
+    }
+}
+
+# Function to check network connectivity
+function Test-NetworkConnection {
+    $networkLabel.Text = "Network: Checking..."
+    [System.Windows.Forms.Application]::DoEvents()
+    
+    try {
+        $result = Test-Connection -ComputerName "www.microsoft.com" -Count 1 -Quiet -ErrorAction SilentlyContinue
+        if ($result) {
+            $networkLabel.Text = "Network: Connected"
+            $networkLabel.ForeColor = if ($script:DarkMode) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::Green }
+            return $true
+        }
+        else {
+            $networkLabel.Text = "Network: No Connection"
+            $networkLabel.ForeColor = [System.Drawing.Color]::Red
+            return $false
+        }
+    }
+    catch {
+        $networkLabel.Text = "Network: Error"
+        $networkLabel.ForeColor = [System.Drawing.Color]::Red
+        return $false
+    }
+}
+
+# Function to toggle dark mode
+function Set-DarkMode {
+    param([bool]$Enable)
+    
+    $script:DarkMode = $Enable
+    $colors = if ($Enable) { $script:DarkColors } else { $script:LightColors }
+    
+    # Form
+    $form.BackColor = $colors.FormBack
+    
+    # Labels
+    $titleLabel.ForeColor = $colors.TextColor
+    $statusLabel.ForeColor = $colors.TextColor
+    $diskSpaceLabel.ForeColor = $colors.TextColor
+    $autoRestartCheck.ForeColor = $colors.TextColor
+    $autoRestartCheck.BackColor = $colors.FormBack
+    
+    # Group boxes
+    $winUpdatesGroup.ForeColor = $colors.TextColor
+    $winUpdatesGroup.BackColor = $colors.FormBack
+    $wingetGroup.ForeColor = $colors.TextColor
+    $wingetGroup.BackColor = $colors.FormBack
+    $logGroup.ForeColor = $colors.TextColor
+    $logGroup.BackColor = $colors.FormBack
+    
+    # ListViews
+    $winUpdatesList.BackColor = $colors.ListBack
+    $winUpdatesList.ForeColor = $colors.TextColor
+    $wingetList.BackColor = $colors.ListBack
+    $wingetList.ForeColor = $colors.TextColor
+    
+    # Log
+    $logBox.BackColor = $colors.LogBack
+    $logBox.ForeColor = $colors.TextColor
+    
+    # Button panel
+    $buttonPanel.BackColor = $colors.FormBack
+    
+    # Update button text
+    $darkModeButton.Text = if ($Enable) { "Light Mode" } else { "Dark Mode" }
+    
+    # Re-check network color
+    if ($networkLabel.Text -match "Connected") {
+        $networkLabel.ForeColor = if ($Enable) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::Green }
+    }
+}
+
+# Function to register auto-restart
+function Register-AutoRestart {
+    try {
+        # Create registry key to flag auto-restart
+        if (-not (Test-Path "HKCU:\Software\WindowsUpdater")) {
+            New-Item -Path "HKCU:\Software\WindowsUpdater" -Force | Out-Null
+        }
+        Set-ItemProperty -Path "HKCU:\Software\WindowsUpdater" -Name "AutoRestart" -Value 1 -Type DWord
+        
+        # Get the batch file path (same directory as script)
+        $scriptDir = Split-Path -Parent $script:ScriptPath
+        $batchPath = Join-Path $scriptDir "RunUpdater.bat"
+        
+        # Create scheduled task to run at logon
+        $action = New-ScheduledTaskAction -Execute $batchPath -WorkingDirectory $scriptDir
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        
+        Register-ScheduledTask -TaskName $script:AutoRestartTaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+        
+        Write-Log "Auto-restart registered successfully"
+        return $true
+    }
+    catch {
+        Write-Log "Failed to register auto-restart: $_"
+        return $false
+    }
+}
+
+# Function to show update history
+function Show-UpdateHistory {
+    $historyForm = New-Object System.Windows.Forms.Form
+    $historyForm.Text = "Windows Update History"
+    $historyForm.Size = New-Object System.Drawing.Size(700, 500)
+    $historyForm.StartPosition = "CenterParent"
+    $historyForm.FormBorderStyle = "FixedDialog"
+    $historyForm.MaximizeBox = $false
+    $historyForm.MinimizeBox = $false
+    
+    if ($script:DarkMode) {
+        $historyForm.BackColor = $script:DarkColors.FormBack
+    }
+    
+    $historyList = New-Object System.Windows.Forms.ListView
+    $historyList.Size = New-Object System.Drawing.Size(660, 420)
+    $historyList.Location = New-Object System.Drawing.Point(10, 10)
+    $historyList.View = "Details"
+    $historyList.FullRowSelect = $true
+    $historyList.Columns.Add("Date", 120) | Out-Null
+    $historyList.Columns.Add("Title", 350) | Out-Null
+    $historyList.Columns.Add("Status", 80) | Out-Null
+    $historyList.Columns.Add("Type", 80) | Out-Null
+    
+    if ($script:DarkMode) {
+        $historyList.BackColor = $script:DarkColors.ListBack
+        $historyList.ForeColor = $script:DarkColors.TextColor
+    }
+    
+    $historyForm.Controls.Add($historyList)
+    
+    # Get update history
+    try {
+        $session = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $session.CreateUpdateSearcher()
+        $historyCount = $searcher.GetTotalHistoryCount()
+        $history = $searcher.QueryHistory(0, [Math]::Min($historyCount, 50))
+        
+        foreach ($entry in $history) {
+            if ($entry.Title) {
+                $item = New-Object System.Windows.Forms.ListViewItem($entry.Date.ToString("yyyy-MM-dd HH:mm"))
+                $item.SubItems.Add($entry.Title) | Out-Null
+                
+                $status = switch ($entry.ResultCode) {
+                    1 { "In Progress" }
+                    2 { "Succeeded" }
+                    3 { "Succeeded (Errors)" }
+                    4 { "Failed" }
+                    5 { "Aborted" }
+                    default { "Unknown" }
+                }
+                $item.SubItems.Add($status) | Out-Null
+                
+                $type = switch ($entry.Operation) {
+                    1 { "Install" }
+                    2 { "Uninstall" }
+                    default { "Other" }
+                }
+                $item.SubItems.Add($type) | Out-Null
+                
+                # Color code by status
+                if ($entry.ResultCode -eq 4) {
+                    $item.ForeColor = [System.Drawing.Color]::Red
+                }
+                elseif ($entry.ResultCode -eq 2) {
+                    $item.ForeColor = if ($script:DarkMode) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::Green }
+                }
+                
+                $historyList.Items.Add($item) | Out-Null
+            }
+        }
+    }
+    catch {
+        $item = New-Object System.Windows.Forms.ListViewItem("Error loading history")
+        $historyList.Items.Add($item) | Out-Null
+    }
+    
+    [void]$historyForm.ShowDialog()
 }
 
 # Function to check Windows Updates
@@ -268,6 +556,11 @@ function Get-WingetUpdatesAvailable {
             Write-Log "Winget is not installed or not in PATH"
             return 0
         }
+        
+        # Refresh winget sources first
+        Write-Log "Refreshing winget sources..."
+        Update-Status "Refreshing package sources..."
+        $null = winget source update 2>&1
         
         # Get upgradable packages
         $wingetOutput = winget upgrade --include-unknown 2>&1 | Out-String
@@ -618,6 +911,17 @@ function Clear-TemporaryFiles {
 
 # Check Button Click Event
 $checkButton.Add_Click({
+        # Check network first
+        if (-not (Test-NetworkConnection)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "No internet connection detected.`n`nPlease check your network connection and try again.",
+                "Network Error",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+            return
+        }
+        
         $checkButton.Enabled = $false
         $startButton.Enabled = $false
         $progressBar.Style = "Marquee"
@@ -638,6 +942,7 @@ $checkButton.Add_Click({
         }
     
         $checkButton.Enabled = $true
+        Update-DiskSpace
         Write-Log "Update check completed"
     })
 
@@ -679,22 +984,41 @@ $startButton.Add_Click({
         Write-Log "All update operations finished"
     
         $progressBar.Value = 100
+        Update-DiskSpace
     
         # Show reboot prompt if needed
         if ($rebootRequired) {
             $rebootButton.Visible = $true
+            $rebootAutoButton.Visible = $true
+            $cleanButton.Visible = $false
             Update-Status "Updates completed. A reboot is required to finish installation."
         
-            $result = [System.Windows.Forms.MessageBox]::Show(
-                "Updates have been installed successfully.`n`nA system restart is required to complete the installation.`n`nWould you like to restart now?",
-                "Restart Required",
-                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                [System.Windows.Forms.MessageBoxIcon]::Question
-            )
-        
-            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-                Write-Log "User initiated system restart"
-                Restart-Computer -Force
+            if ($autoRestartCheck.Checked) {
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "Updates have been installed successfully.`n`nA system restart is required to complete the installation.`n`nWould you like to restart now?`n`nThe updater will relaunch automatically after restart.",
+                    "Restart Required",
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Question
+                )
+            
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    Write-Log "User initiated system restart with auto-relaunch"
+                    Register-AutoRestart
+                    Restart-Computer -Force
+                }
+            }
+            else {
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "Updates have been installed successfully.`n`nA system restart is required to complete the installation.`n`nWould you like to restart now?",
+                    "Restart Required",
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Question
+                )
+            
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    Write-Log "User initiated system restart"
+                    Restart-Computer -Force
+                }
             }
         }
         else {
@@ -706,11 +1030,16 @@ $startButton.Add_Click({
             )
         
             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                if ($autoRestartCheck.Checked) {
+                    Register-AutoRestart
+                }
                 Write-Log "User initiated system restart"
                 Restart-Computer -Force
             }
             else {
                 $rebootButton.Visible = $true
+                $rebootAutoButton.Visible = $true
+                $cleanButton.Visible = $false
             }
         }
     
@@ -733,6 +1062,32 @@ $rebootButton.Add_Click({
         }
     })
 
+# Reboot with Auto-Start Button Click Event
+$rebootAutoButton.Add_Click({
+        $result = [System.Windows.Forms.MessageBox]::Show(
+            "Are you sure you want to restart your computer now?`n`nThe updater will relaunch automatically after restart.`n`nPlease save all your work before continuing.",
+            "Confirm Restart with Auto-Relaunch",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+    
+        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Write-Log "Initiating system restart with auto-relaunch..."
+            Register-AutoRestart
+            Restart-Computer -Force
+        }
+    })
+
+# Dark Mode Button Click Event
+$darkModeButton.Add_Click({
+        Set-DarkMode (-not $script:DarkMode)
+    })
+
+# History Button Click Event
+$historyButton.Add_Click({
+        Show-UpdateHistory
+    })
+
 # Clean Temp Button Click Event
 $cleanButton.Add_Click({
         $result = [System.Windows.Forms.MessageBox]::Show(
@@ -749,6 +1104,7 @@ $cleanButton.Add_Click({
         
             Clear-TemporaryFiles
         
+            Update-DiskSpace
             $cleanButton.Enabled = $true
             $checkButton.Enabled = $true
         }
@@ -772,6 +1128,22 @@ if (-not $isAdmin) {
     $checkButton.Enabled = $false
     $statusLabel.Text = "[!] Please restart as Administrator"
     $statusLabel.ForeColor = [System.Drawing.Color]::Red
+}
+
+# Initialize on startup
+Update-DiskSpace
+Test-NetworkConnection
+
+# Check if this is an auto-restart run
+if ($script:IsAutoRestart) {
+    Write-Log "Resumed after system restart"
+    Update-Status "Welcome back! Click 'Check for Updates' to continue."
+    [System.Windows.Forms.MessageBox]::Show(
+        "The system has restarted successfully.`n`nYou can now check for additional updates or clean temporary files.",
+        "Restart Complete",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
 }
 
 Write-Log "Windows System Updater started"

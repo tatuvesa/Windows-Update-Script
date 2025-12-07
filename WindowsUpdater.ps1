@@ -61,18 +61,18 @@ $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
 # Color schemes
 $script:LightColors = @{
-    FormBack = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    FormBack  = [System.Drawing.Color]::FromArgb(240, 240, 240)
     GroupBack = [System.Drawing.Color]::FromArgb(240, 240, 240)
     TextColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
-    ListBack = [System.Drawing.Color]::White
-    LogBack = [System.Drawing.Color]::White
+    ListBack  = [System.Drawing.Color]::White
+    LogBack   = [System.Drawing.Color]::White
 }
 $script:DarkColors = @{
-    FormBack = [System.Drawing.Color]::FromArgb(32, 32, 32)
+    FormBack  = [System.Drawing.Color]::FromArgb(32, 32, 32)
     GroupBack = [System.Drawing.Color]::FromArgb(45, 45, 45)
     TextColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
-    ListBack = [System.Drawing.Color]::FromArgb(45, 45, 45)
-    LogBack = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    ListBack  = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    LogBack   = [System.Drawing.Color]::FromArgb(30, 30, 30)
 }
 
 # Title Label

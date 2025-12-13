@@ -1065,22 +1065,30 @@ $script:SkipPackages = @(
 
 # Mapping of package IDs to process names that need to be closed before updating
 $script:ProcessesToClose = @{
-    "Mozilla.Firefox"           = @("firefox")
-    "Mozilla.Thunderbird"       = @("thunderbird")
-    "Google.Chrome"             = @("chrome")
-    "Microsoft.Edge"            = @("msedge")
-    "Opera.Opera"               = @("opera")
-    "BraveSoftware.BraveBrowser"= @("brave")
+    "Mozilla.Firefox"           = @("firefox", "plugin-container", "crashreporter", "updater", "pingsender", "default-browser-agent", "maintenanceservice")
+    "Mozilla.Thunderbird"       = @("thunderbird", "plugin-container", "crashreporter", "updater")
+    "Google.Chrome"             = @("chrome", "GoogleUpdate", "crashpad_handler")
+    "Microsoft.Edge"            = @("msedge", "MicrosoftEdgeUpdate")
+    "Opera.Opera"               = @("opera", "opera_crashreporter", "launcher")
+    "BraveSoftware.BraveBrowser"= @("brave", "BraveUpdate")
     "Vivaldi.Vivaldi"           = @("vivaldi")
     "Discord.Discord"           = @("discord", "update")
     "Spotify.Spotify"           = @("spotify")
     "SlackTechnologies.Slack"   = @("slack")
     "Microsoft.Teams"           = @("teams", "ms-teams")
     "Zoom.Zoom"                 = @("zoom")
-    "Valve.Steam"               = @("steam", "steamwebhelper")
+    "Valve.Steam"               = @("steam", "steamwebhelper", "steamservice")
     "EpicGames.EpicGamesLauncher" = @("epicgameslauncher")
     "Notepad++.Notepad++"       = @("notepad++")
     "VideoLAN.VLC"              = @("vlc")
+}
+
+# Services that should be stopped before updating certain packages
+$script:ServicesToStop = @{
+    "Mozilla.Firefox"    = @("MozillaMaintenance")
+    "Mozilla.Thunderbird"= @("MozillaMaintenance")
+    "Google.Chrome"      = @("gupdate", "gupdatem")
+    "Microsoft.Edge"     = @("edgeupdate", "edgeupdatem")
 }
 
 # Function to close processes for a package
@@ -1089,6 +1097,25 @@ function Close-ProcessesForPackage {
     
     $closedAny = $false
     
+    # Stop related services first
+    foreach ($key in $script:ServicesToStop.Keys) {
+        if ($PackageId -like "*$key*" -or $key -like "*$PackageId*") {
+            $serviceNames = $script:ServicesToStop[$key]
+            foreach ($svcName in $serviceNames) {
+                $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+                if ($svc -and $svc.Status -eq 'Running') {
+                    Write-Log "Stopping service $svcName before update..."
+                    try {
+                        Stop-Service -Name $svcName -Force -ErrorAction SilentlyContinue
+                        $closedAny = $true
+                    }
+                    catch { }
+                }
+            }
+        }
+    }
+    
+    # Then close processes
     foreach ($key in $script:ProcessesToClose.Keys) {
         if ($PackageId -like "*$key*" -or $key -like "*$PackageId*") {
             $processNames = $script:ProcessesToClose[$key]
@@ -1113,7 +1140,7 @@ function Close-ProcessesForPackage {
     }
     
     if ($closedAny) {
-        Start-Sleep -Seconds 2  # Give processes time to fully close
+        Start-Sleep -Seconds 3  # Give processes and services time to fully close
     }
     
     return $closedAny
@@ -1164,8 +1191,23 @@ function Install-WingetUpdatesSelected {
                 Write-Log "Closed running processes for $($appInfo.Name)"
             }
             
-            # Run upgrade without silent mode to avoid failures with packages that don't support it
-            $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
+            # Some packages need --silent to avoid requiring user interaction
+            # Firefox, Chrome, etc. support silent installs
+            $silentPackages = @("Mozilla.Firefox", "Mozilla.Thunderbird", "Google.Chrome", "VideoLAN.VLC", "Notepad++.Notepad++")
+            $useSilent = $false
+            foreach ($pkg in $silentPackages) {
+                if ($appInfo.Id -like "*$pkg*") {
+                    $useSilent = $true
+                    break
+                }
+            }
+            
+            if ($useSilent) {
+                $result = winget upgrade --id $appInfo.Id --silent --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
+            }
+            else {
+                $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
+            }
             
             if ($LASTEXITCODE -eq 0) {
                 $item.SubItems[3].Text = "Updated"

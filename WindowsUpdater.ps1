@@ -1191,18 +1191,25 @@ function Install-WingetUpdatesSelected {
                 Write-Log "Closed running processes for $($appInfo.Name)"
             }
             
-            # Use interactive mode - allows installer windows to appear but they complete automatically
-            $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements 2>&1 | Out-String
+            # Run winget in a new visible PowerShell window to avoid issues with hidden console
+            $wingetArgs = "upgrade --id `"$($appInfo.Id)`" --force --accept-package-agreements --accept-source-agreements"
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "winget.exe"
+            $psi.Arguments = $wingetArgs
+            $psi.UseShellExecute = $true
+            $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
             
-            if ($LASTEXITCODE -eq 0) {
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            $proc.WaitForExit()
+            $exitCode = $proc.ExitCode
+            
+            if ($exitCode -eq 0) {
                 $item.SubItems[3].Text = "Updated"
                 Write-Log "Updated: $($appInfo.Name)"
             }
             else {
                 $item.SubItems[3].Text = "Failed"
-                # Extract meaningful error from output
-                $errorMsg = if ($result -match "0x[0-9a-fA-F]+") { $Matches[0] } else { "Exit code: $LASTEXITCODE" }
-                Write-Log "Failed to update: $($appInfo.Name) ($errorMsg)"
+                Write-Log "Failed to update: $($appInfo.Name) (Exit code: $exitCode)"
             }
         }
         catch {

@@ -1191,6 +1191,9 @@ function Install-WingetUpdatesSelected {
                 Write-Log "Closed running processes for $($appInfo.Name)"
             }
             
+            # Log the ID being used for debugging
+            Write-Log "Using package ID: $($appInfo.Id)"
+            
             # Run winget in a new PowerShell window to avoid issues with hidden/elevated console
             $wingetCmd = "winget upgrade --id '$($appInfo.Id)' --accept-package-agreements --accept-source-agreements; exit `$LASTEXITCODE"
             $proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile", "-Command", $wingetCmd -Wait -PassThru

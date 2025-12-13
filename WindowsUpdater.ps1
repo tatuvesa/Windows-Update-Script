@@ -1191,23 +1191,8 @@ function Install-WingetUpdatesSelected {
                 Write-Log "Closed running processes for $($appInfo.Name)"
             }
             
-            # Some packages need --silent to avoid requiring user interaction
-            # Firefox, Chrome, etc. support silent installs
-            $silentPackages = @("Mozilla.Firefox", "Mozilla.Thunderbird", "Google.Chrome", "VideoLAN.VLC", "Notepad++.Notepad++")
-            $useSilent = $false
-            foreach ($pkg in $silentPackages) {
-                if ($appInfo.Id -like "*$pkg*") {
-                    $useSilent = $true
-                    break
-                }
-            }
-            
-            if ($useSilent) {
-                $result = winget upgrade --id $appInfo.Id --silent --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
-            }
-            else {
-                $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
-            }
+            # Use interactive mode - allows installer windows to appear but they complete automatically
+            $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements 2>&1 | Out-String
             
             if ($LASTEXITCODE -eq 0) {
                 $item.SubItems[3].Text = "Updated"

@@ -1063,6 +1063,62 @@ $script:SkipPackages = @(
     "Microsoft.Getstarted"
 )
 
+# Mapping of package IDs to process names that need to be closed before updating
+$script:ProcessesToClose = @{
+    "Mozilla.Firefox"           = @("firefox")
+    "Mozilla.Thunderbird"       = @("thunderbird")
+    "Google.Chrome"             = @("chrome")
+    "Microsoft.Edge"            = @("msedge")
+    "Opera.Opera"               = @("opera")
+    "BraveSoftware.BraveBrowser"= @("brave")
+    "Vivaldi.Vivaldi"           = @("vivaldi")
+    "Discord.Discord"           = @("discord", "update")
+    "Spotify.Spotify"           = @("spotify")
+    "SlackTechnologies.Slack"   = @("slack")
+    "Microsoft.Teams"           = @("teams", "ms-teams")
+    "Zoom.Zoom"                 = @("zoom")
+    "Valve.Steam"               = @("steam", "steamwebhelper")
+    "EpicGames.EpicGamesLauncher" = @("epicgameslauncher")
+    "Notepad++.Notepad++"       = @("notepad++")
+    "VideoLAN.VLC"              = @("vlc")
+}
+
+# Function to close processes for a package
+function Close-ProcessesForPackage {
+    param([string]$PackageId)
+    
+    $closedAny = $false
+    
+    foreach ($key in $script:ProcessesToClose.Keys) {
+        if ($PackageId -like "*$key*" -or $key -like "*$PackageId*") {
+            $processNames = $script:ProcessesToClose[$key]
+            foreach ($procName in $processNames) {
+                $procs = Get-Process -Name $procName -ErrorAction SilentlyContinue
+                if ($procs) {
+                    Write-Log "Closing $procName before update..."
+                    $procs | ForEach-Object { 
+                        try {
+                            $_.CloseMainWindow() | Out-Null
+                            Start-Sleep -Milliseconds 500
+                            if (!$_.HasExited) {
+                                $_ | Stop-Process -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                        catch { }
+                    }
+                    $closedAny = $true
+                }
+            }
+        }
+    }
+    
+    if ($closedAny) {
+        Start-Sleep -Seconds 2  # Give processes time to fully close
+    }
+    
+    return $closedAny
+}
+
 # Function to install Winget Updates
 function Install-WingetUpdatesSelected {
     $selectedApps = @()
@@ -1102,6 +1158,12 @@ function Install-WingetUpdatesSelected {
         [System.Windows.Forms.Application]::DoEvents()
         
         try {
+            # Close any running processes that might block the update
+            $closedProcesses = Close-ProcessesForPackage -PackageId $appInfo.Id
+            if ($closedProcesses) {
+                Write-Log "Closed running processes for $($appInfo.Name)"
+            }
+            
             # Run upgrade without silent mode to avoid failures with packages that don't support it
             $result = winget upgrade --id $appInfo.Id --force --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-String
             

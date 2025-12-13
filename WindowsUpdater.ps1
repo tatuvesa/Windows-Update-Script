@@ -914,32 +914,54 @@ function Get-WingetUpdatesAvailable {
         $script:WingetUpdates = @()
         $wingetList.Items.Clear()
         
-        # Parse winget output
+        # Parse winget output - detect column positions from header
         $lines = $wingetOutput -split "`n"
-        $headerFound = $false
-        $separatorFound = $false
+        $headerLine = ""
+        $idPos = 0
+        $versionPos = 0
+        $availablePos = 0
+        $sourcePos = 0
+        $dataStarted = $false
         
         foreach ($line in $lines) {
+            # Find header line to get column positions
             if ($line -match "^Name\s+Id\s+Version\s+Available") {
-                $headerFound = $true
+                $headerLine = $line
+                $idPos = $line.IndexOf("Id")
+                $versionPos = $line.IndexOf("Version")
+                $availablePos = $line.IndexOf("Available")
+                # Source column may or may not exist
+                if ($line -match "Source") {
+                    $sourcePos = $line.IndexOf("Source")
+                } else {
+                    $sourcePos = $line.Length
+                }
                 continue
             }
-            if ($headerFound -and $line -match "^-+") {
-                $separatorFound = $true
+            
+            # Skip separator line and mark data start
+            if ($idPos -gt 0 -and $line -match "^-+") {
+                $dataStarted = $true
                 continue
             }
-            if ($separatorFound -and $line.Trim() -ne "" -and $line -notmatch "upgrades available" -and $line -notmatch "^The following") {
-                # Parse the line - winget uses fixed-width columns
-                if ($line.Length -gt 20) {
-                    # Try to parse the update info
-                    $parts = $line -split '\s{2,}'
-                    if ($parts.Count -ge 4) {
-                        $appName = $parts[0].Trim()
-                        $appId = $parts[1].Trim()
-                        $currentVer = $parts[2].Trim()
-                        $availableVer = $parts[3].Trim()
+            
+            # Parse data lines
+            if ($dataStarted -and $line.Trim() -ne "" -and $line -notmatch "upgrades available" -and $line -notmatch "^The following") {
+                if ($line.Length -ge $availablePos) {
+                    try {
+                        $appName = $line.Substring(0, $idPos).Trim()
+                        $appId = $line.Substring($idPos, $versionPos - $idPos).Trim()
+                        $currentVer = $line.Substring($versionPos, $availablePos - $versionPos).Trim()
                         
-                        if ($appName -and $availableVer -and $appName -notmatch "^-+$") {
+                        $availableVer = ""
+                        if ($sourcePos -gt $availablePos -and $line.Length -ge $sourcePos) {
+                            $availableVer = $line.Substring($availablePos, $sourcePos - $availablePos).Trim()
+                        } elseif ($line.Length -gt $availablePos) {
+                            $availableVer = $line.Substring($availablePos).Trim()
+                        }
+                        
+                        # Validate we got a proper package ID (should contain a dot like Mozilla.Firefox)
+                        if ($appName -and $appId -match "\." -and $appName -notmatch "^-+$") {
                             $updateInfo = @{
                                 Name             = $appName
                                 Id               = $appId
@@ -957,6 +979,10 @@ function Get-WingetUpdatesAvailable {
                             
                             $wingetList.Items.Add($item) | Out-Null
                         }
+                    }
+                    catch {
+                        # Skip lines that can't be parsed
+                        continue
                     }
                 }
             }

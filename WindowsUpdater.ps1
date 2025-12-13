@@ -1191,8 +1191,8 @@ function Install-WingetUpdatesSelected {
                 Write-Log "Closed running processes for $($appInfo.Name)"
             }
             
-            # Run winget with minimal arguments in a new visible window
-            $proc = Start-Process -FilePath "winget" -ArgumentList "upgrade", "--id", $appInfo.Id -Wait -PassThru
+            # Run winget through cmd.exe to get a fresh console environment (hidden console causes issues)
+            $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "winget upgrade --id $($appInfo.Id) --accept-package-agreements --accept-source-agreements" -Wait -PassThru
             $exitCode = $proc.ExitCode
             
             if ($exitCode -eq 0) {
